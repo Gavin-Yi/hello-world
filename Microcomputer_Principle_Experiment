@@ -1,0 +1,525 @@
+*********************
+*****51单片机程序*****
+*****微机原理作业*****
+*********************
+
+//拼字程序			OK
+	ORG		0000H
+	MOV 	DPTR,#2040H	;2040地址放入DPTR
+	MOVX 	A 				  ;寄存器寻址2040
+	SWAP 	A 				  ;低四位和高四位交换
+	ANL 	A,#0F0H 		;保留高四位
+	MOV 	R0,A 			  ;高四位暂存入R0
+	INC 	DPTR			  ;2041地址放入DPTR
+	MOVX 	A,@DPTR 		;寄存器寻址2041
+	ANL 	A,#0FH 			;保留低四位
+	ORL 	A 				  ;2040在高，2041在低
+	INC 	DPTR 			  ;地址指向2042
+	MOVX 	@DPTR,A 		;结果存入2042
+	SJMP 	$				
+END
+
+//第三个轮流亮		OK
+	ORG		0000H 			
+	MOV		P1,#0xFB		;第三个数码管亮
+	MOV		A,#0XFE 		;初始化点亮第一段
+NEXT:
+	MOV		P2,A 			
+	MOV		R3,#0			  ;延时
+LOOP:
+	MOV		R4,#0
+	DJNZ	R4,$
+	DJNZ	R3,LOOP
+	RL		A 				  ;数码管位选左移
+	SJMP	NEXT 			  ;循环 
+END
+
+//42LED轮流亮	OK
+		ORG		0000H
+STAT:	
+    MOV		P1,#0xFE 		;初始化点亮第一个数码管
+		MOV		P2,#0XFE 		;初始化点亮第一段
+		MOV		A,#0XFE
+NEXT:
+		MOV		P2,A 			  ;A保存段选信息
+		MOV		R3,#0 			;延时
+LOOP:
+		MOV		R4,#0
+		DJNZ	R4,$
+		DJNZ	R3,LOOP
+		RL		A 				   ;段选下一位
+		JNB		ACC.7,LOP1 	;判断第8位,如果越界,跳转.
+		SJMP	NEXT
+LOP1:	MOV		A,P1 			;载入位选信号
+		RL		A 				  ;数码管转向下一个
+		JNB		ACC.6,LOP2 	;判断P1第7位,如果越界,跳转.
+		MOV		P1,A 			  ;将位选信息送给P1
+		MOV		A,#0XFE 		;初始化段选信息
+		SJMP	NEXT 			
+LOP2:	SJMP	STAT		  ;全部循环走完,从头开始
+		END
+
+
+// 2.1	按1亮1，按2亮2... 			(OK)
+	ORG 	0
+	MOV 	DPTR,#TAB0		;记录表地址
+STA1:
+	MOV 	P2,#0FFH 		  ;初始化位选都不亮 				
+	MOV		P1,#0FFH		  ;初始化段选都不亮
+
+	MOV 	R0,#01			  ;保存开关位置信息
+ASP:
+	MOV		A,P0			    ;读拨动开关信号
+ASP1:
+	RRC		A 				    ;带进位的右移
+	JNC		LED 			    ;循环右移至C为0
+	INC 	R0 				    ;没有跳转就自增
+	CJNE	R0,#9,ASP1		;判断是否检查完所有开关位
+	SJMP	STA1
+LED:
+	MOV		A,R0 			    ;用R0查表
+	MOVC	A,@A+DPTR
+	MOV 	P2,A 		    	;发送位选信号
+	DJNZ 	P0,#FBH,LED1
+	MOV 	P1,#0FDH 	  	;若按下第三个开关,亮第二个数码管
+	SJMP 	STA1
+LED1:
+	MOV 	A,P0 			    ;发送段选信号
+	MOV 	P1,A
+	SJMP 	STA1 		
+TAB0:
+	DB 		0C0H,0F9H,0A4H,0B0H,99H,92H,82H,0F8H,80H,90H,88H,83H,0C6H,0A1H,86H,8EH,0FFH
+	END
+
+
+//	2.2	按1六个轮流亮1 			(CHECKED)
+	ORG		0
+DLED:	
+	MOV 	P1,#0FFH			;全灭
+	MOV 	P2,#0FFH
+	SETB 	C
+	MOV 	R0,#01H	
+ASP:						    	;读按键信息	
+	MOV		A,P0
+	MOV 	05H,A 				;05H用来保存旧的开关信息
+ASP1:
+	RRC		A 					 					
+	JNC		WE  				
+	INC 	R0 				  	;R0开关信号
+	CJNE	R0,#9,ASP1		;判断是否检查完所有开关位
+	SJMP	DLED
+WE:
+	MOV 	P1,#0FEH			;初始化段选第一个数码管
+	MOV 	DPTR,#TAB0 		;记录表地址
+	MOV 	A,R0
+	MOVC 	A,@A+DPTR 		;查表,位选信息
+	MOV 	P2,A 				  ;送入位选信号
+NEXT:
+	MOV 	R3,#0		 	  	;延时
+LOP1:
+ 	MOV 	R4,#0
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP1
+	MOV 	A,P0		 	  	;监听开关信号是否变化
+	CJNE 	A,05H,DLED		;若状态变化,则重新读开关信息
+	MOV 	A,P1  				;指向下一个数码管
+	RL 		A
+	MOV 	P1,A 
+	SJMP 	NEXT
+TAB0:
+	DB 		0C0H,0F9H,0A4H,0B0H,99H,92H,82H,0F8H,80H,90H,88H,83H,0C6H,0A1H,86H,8EH,0FFH
+	END
+
+// 两个一组亮8		(OK)
+	ORG 	0
+STA1:
+	MOV 	P2,#80H 			;位选亮8
+	MOV 	P1,#0AAH 			;段选亮1,3,5,7数码管
+LOP:	
+	MOV		R3,#0 				;延时
+LOP1:
+	MOV		R4,#0
+	DJNZ	R4,$
+	DJNZ	R3,LOP1 
+	MOV 	A,P1 			  	;P1左移,段选2,4,6,8
+	RL		A
+	MOV 	P1,A
+	SJMP 	LOP  			  	;循环
+END
+
+//第四个数码管依次亮灭   OK
+	ORG 	0
+STAT:
+	MOV 	P1,#0F7H 			;段选第四个数码管
+	MOV 	P2,#0FEH 			;初始化第一位片选
+	SETB 	C 					  ;用C判断是否位选一个循环
+LOP:	
+	MOV		R3,#0 				;延时
+LOP1:
+	MOV		R4,#0
+	DJNZ	R4,$
+	DJNZ	R3,LOP1 
+	MOV 	A,P2 			  	;将P2传给A
+	RLC 	A 				  	;对A进行带进位的左移,后再减1,依次点亮数码管
+	JNC		LOP2 			  	;若依次全部点亮完,跳转 
+	DEC  	A 					
+	MOV 	P2,A 
+	SJMP 	LOP 
+LOP2:
+	MOV		R3,#0 				;延时
+LOP3:
+	MOV		R4,#0
+	DJNZ	R4,$
+	DJNZ	R3,LOP3
+	RLC 	A 				  	;循环左移,再加1,依次熄灭数码管
+	JC		LOP 
+	INC  	A
+	MOV 	P2,A 
+	SJMP 	LOP2
+END
+
+//拨动开关，全部亮8		OK
+	ORG 	0
+STAT:
+	MOV 	P2,#80H 			;位选亮8
+ASP:
+	MOV		P0,#0FFH 			;初始化全不亮
+	MOV		A,P0
+LOP:
+	JB 		ACC.0,CLE 		;判断开关1是否打开
+	MOV 	P1,#0 				;若打开 
+	SJMP 	ASP
+CLE:
+	MOV 	P1,#0FFH 			;若没打开
+	SJMP 	ASP
+END
+
+//开关ON，数码管显示0,OFF,显示1 		OK
+	ORG 	0
+STAT:
+	MOV 	P1,#0 				;初始化段选都不亮
+ASP:			
+	MOV		A,P0				  ;读拨动开关信号
+LOP:		
+	MOV 	P1,A  				;段选需要亮0的数码管
+	MOV 	P2,#0C0H 			;位选亮0
+	MOV 	R3,#0 				;延时
+LOP1:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP1
+ 	CPL 	A 				  	;对段选信号取反
+	MOV 	P1,A
+	MOV 	P2,#0F9H 			;位选亮1
+ 	MOV 	R3,#0 				;延时
+LOP2:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP2
+	SJMP 	ASP 			  	;循环
+END
+
+
+//8管同时亮，中断一次，变反	OK
+	ORG 	0
+	AJMP 	STAR 
+	ORG		3
+	CPL 	A 				  	;对位选信号取反
+	MOV 	P2,A
+	RETI
+STAR:
+	MOV 	P1,#0FEH 			;段选第一个数码管
+	MOV 	A,#0
+	MOV 	P2,A 			  	;位选全亮
+	SETB 	EA 				  	;置EA=1
+	SETB	EX0 			  	;允许INTO中断
+	SETB 	IT0 			  	;边缘触发中断
+	SJMP 	$
+END
+
+//循环亮H		OK
+	ORG 	0
+	AJMP 	STAR
+	ORG		3
+	RL 		A 				  	;段选信号左移
+	MOV 	P1,A
+	RETI
+STAR:
+	MOV 	P2,#89H 			;位选信号亮H
+	MOV 	A,#0DFH 			;初始化亮第6个数码管
+	MOV 	P1,A
+	SETB 	EA 				  	;置EA=1
+	SETB	EX0				  	;允许INTO中断
+	SETB 	IT0 			  	;边缘触发中断
+	SJMP 	$
+
+
+// 显示中断次数FFH		OK
+	ORG 	0
+	AJMP 	NT 
+	ORG 	0003H
+	AJMP 	INTOR
+NT:
+	MOV 	IE,#81H 			;置EA=1,允许INTO中断
+	SETB 	IT0 					;边缘触发中断
+	MOV 	R0,#0 				;记录低位次数
+	MOV 	R1,#0 				;记录高位次数
+BIOU:
+	MOV 	DPTR,#TAB0		;记录表地址
+	MOV 	A,R0 			  	;查表低位
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FEH 			;段选第一个数码管
+	MOV 	P2,A 			  	;发送位选信号
+	MOV 	R3,#0 				;延时
+LOP1:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP1	
+	MOV 	A,R1 			  	;查表高位
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FDH 			;段选第二个数码管
+	MOV 	P2,A 			  	;发送位选信号
+	MOV 	R3,#0 				;延时
+LOP2:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP2	
+	SJMP 	BIOU 			  	;跳转
+INTOR: 						  	;中断操作
+	INC  	R0 		 		  	;低位记录+1
+	CJNE 	R0,#10H,RET0 	;若低位没有到16,跳转
+	MOV 	R0,#0 		 		;低位清零
+	INC 	R1 				  	;高位记录+1
+	CJNE 	R1,#10H,RET0 	;若高位没有到16,跳转
+	MOV 	R1,#0 				;高位清零
+RET0:
+	POP 	DPH 			  	;出栈,在压栈,中断返回指向BIOU
+	POP 	DPL
+	MOV 	DPTR,#BIOU
+	PUSH 	DPL
+	PUSH 	DPH
+	RETI
+TAB0:
+	DB 		0C0H,0F9H,0A4H,0B0H,99H,92H,82H,0F8H,80H,90H,88H,83H,0C6H,0A1H,86H,8EH,0FFH
+	END
+
+//	显示中断次数BCD码		OK
+	ORG 	0
+	AJMP 	NT 
+	ORG 	0003H
+	AJMP 	INTOR
+NT:
+	MOV 	IE,#81H 			;置EA=1,允许INTO中断
+	SETB 	IT0 				  ;边缘触发中断
+	MOV 	R0,#0 				;记录第一位次数
+	MOV 	R1,#0 				;记录第二位次数
+	MOV 	R2,#0 				;记录第三位次数
+BIOU:
+	MOV 	DPTR,#TAB0 		;记录表地址
+	MOV 	A,R0 				  ;查表第一位
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FEH 			;段选第一个数码管
+	MOV 	P2,A 				  ;发送位选信号
+	MOV 	R3,#0 				;延时
+LOP1:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP1	 	
+	MOV 	A,R1 			  	;查表第二位
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FDH 			;段选第二个数码管
+	MOV 	P2,A 				
+	MOV 	R3,#0 				;延时
+LOP2:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP2
+	MOV 	A,R2 			  	;查表第三位
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FBH 			;段选第三个数码管
+	MOV 	P2,A
+	MOV 	R3,#0			  	;延时
+LOP3:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP3
+	SJMP 	BIOU 			  	;循环
+INTOR:
+	INC  	R0 				  	;第一位+1
+	CJNE 	R0,#06H,INTOR1 		;判断是否超过255
+	CJNE 	R1,#05H,INTOR1
+	CJNE 	R2,#02H,INTOR1
+	MOV 	R0,#0 				;超过255,三位全部清零
+	MOV 	R1,#0
+	MOV	 	R2,#0
+	SJMP	RET0
+INTOR1:	
+	CJNE 	R0,#0AH,RET0	;若第一位不超过9,跳转
+	MOV 	R0,#0 				;第一位清零
+	INC 	R1 					  ;第二位+1
+	CJNE 	R1,#0AH,RET0 	;若第二位不超过9,跳转
+	MOV 	R1,#0 				;第二位清零
+	INC  	R2 				  	;第三位+1
+	CJNE 	R2,#03H,RET0 	;若第三位不超过2,跳转
+	MOV 	R2,#0 	 			;第三位清零
+RET0: 							  ;出栈,在压栈,中断返回指向BIOU
+	POP 	DPH
+	POP 	DPL
+	MOV 	DPTR,#BIOU
+	PUSH 	DPL
+	PUSH 	DPH
+	RETI
+TAB0:
+	DB 		0C0H,0F9H,0A4H,0B0H,99H,92H,82H,0F8H,80H,90H,88H,83H,0C6H,0A1H,86H,8EH,0FFH
+	END
+
+
+
+//100MS   OK
+	ORG 	0000H
+	MOV 	R0,#0 				;100ms需要两次16位定时
+	MOV 	TMOD,#01H 		;T0工作在16位定时器模式
+	MOV 	P2,#80H 			;位选显示8
+	MOV 	P1,#0FEH 			;初始化段选第一个数码管
+LOP:
+	MOV 	TH0,#0 				;第一次初始化
+	MOV 	TL0,#0
+	SETB 	TR0
+COUN:
+	JNB 	TF0,$	 		  	;等待,直至计时位溢出
+	INC 	R0 					  ;R0判断计时次数
+	CJNE 	R0,#02H,LOP1 	;若R0加到2,则动作并复位
+	CLR 	TF0 				  ;复位计时器
+	MOV		R0,#0 				;复位R0
+	MOV 	A,P1 			  	;数码管转向下一个
+	RL 		A
+	MOV 	P1,A
+	SJMP 	LOP 				  ;重新开始计时
+LOP1:
+	CLR 	TF0					  ;清除溢出位
+	MOV 	TH0,#99H 			;计算100ms剩下时间
+	MOV 	TL0,#0EDH
+	SETB 	TR0
+	SJMP 	COUN	
+END
+
+//MIAO BIAO
+	ORG 	0000H			  	;1s需要14次16位定时
+	MOV 	R0,#0 				;记录计时次数
+	MOV 	R1,#0			  	;存放第一个数码管段选信息
+	MOV 	R2,#0 				;存放第二个数码管段选信息
+	MOV 	DPTR,#TAB0		;记录表地址
+	MOV 	TMOD,#01H 		;T0工作在16位定时器模式
+LOP: 							    ;前13次初始化
+	CJNE 	R0,#0EH,LOP1 		;若R0没计满14次,跳转,进行第14次循环
+	MOV 	TH0,#0
+	MOV 	TL0,#0
+	SETB 	TR0
+LL:								    ;亮灯
+	;CLR 	TF0					
+	MOV 	A,R1 				  ;查表R1
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FEH
+	MOV 	P2,A 				  ;点亮第一个数码管
+	MOV 	R3,#0				  ;延时
+LOP4:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP4	
+	MOV 	A,R2 			  	;查表R2
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FDH
+	MOV 	P2,A 			  	;点亮第二个数码管
+	MOV 	R3,#0			  	;延时
+LOP5:
+	MOV		R4,#10H
+	DJNZ 	R4,$
+	DJNZ 	R3,LOP5		 	
+COUN:
+	JNB 	TF0,LL 				;若计时位没溢出,循环点亮
+	INC 	R0
+	CJNE 	R0,#0DH,LOP 	;若R0没计满13次,跳转
+
+	CLR 	TF0 			  	;复位计时器
+	MOV 	R0,#0 				;复位计时次数
+	INC 	R1
+	CJNE 	R1,#0AH,LL 		;若R1不等于10,跳转点亮
+	MOV 	R1,#0
+	INC 	R2
+	CJNE 	R2,#06H,LL 		;若R2不等于6,跳转点亮
+	MOV 	R2,#0
+	SJMP 	LOP	
+LOP1:
+	CLR 	TF0 				  ;复位计时器
+	MOV 	TH0,#03H 			;第14次循环的初始化
+	MOV 	TL0,#3EH
+	SETB 	TR0
+	SJMP 	COUN
+TAB0:
+	DB 		0C0H,0F9H,0A4H,0B0H,99H,92H,82H,0F8H,80H,90H,88H,83H,0C6H,0A1H,86H,8EH,0FFH
+	END	
+
+
+
+//秒表(NEW)
+	ORG  	0000H
+	AJMP 	MAIN 	  	;转主程序
+	ORG 	001BH 		;T1入口
+	AJMMP 	IT1P 		;转T1中断程序
+	ORG 	100H
+MAIN:
+	MOV 	R0,#0 		;记录小循环
+	MOV  	R1,#0 		;记录大循环
+	MOV 	R2,#0 		;记录低位
+	MOV  	R3,#0 		;记录高位
+	MOV 	DPTR,#TAB0	;记录表地址
+	MOV 	TMOD,#20H 	;T1定时方式2,自动装载
+	MOV  	TL1,#19H 	;T1计250微秒
+	MOV  	TH1,#19H  	
+	SETB 	ET1 	  	;允许T1中断
+	SETB 	EA 			  ;CPU开放中断
+	SETB 	TR1 	 	  ;启动T1
+LL:								;亮灯
+	MOV 	A,R2 				;查表R2
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FEH
+	MOV 	P2,A 			;点亮第一个数码管
+	MOV 	R4,#0			;延时
+LOP4:
+	MOV		R5,#10H
+	DJNZ 	R5,$
+	DJNZ 	R4,LOP4	
+	MOV 	A,R3 				;查表R3
+	MOVC 	A,@A+DPTR
+	MOV 	P1,#0FDH
+	MOV 	P2,A 				;点亮第二个数码管
+	MOV 	R4,#0				;延时
+LOP5:
+	MOV		R5,#10H
+	DJNZ 	R5,$
+	DJNZ 	R4,LOP5	
+	SJMP 	LL
+IT1P:
+ 	INC 	R0 			    ;小循环+1
+ 	CJNE 	R0,#0C8H,RET0 		;小循环200次,计时50ms
+ 	INC 	R1 			    ;大循环+1
+ 	MOV  	R0,#0 			;R0复位
+ 	CJNE 	R1,#14H,RET0  	;大循环20次,计时1s 		
+ 	MOV 	R1,#0 			;R1复位
+	INC 	R2
+	CJNE 	R2,#0AH,RET0 	;若R2不等于10,跳出中断
+	MOV 	R2,#0
+	INC 	R3
+	CJNE 	R3,#06H,RET0 	;若R3不等于6,跳出中断
+	MOV 	R3,#0
+	SJMP 	RET0	
+RET0: 					    ;出栈,在压栈,中断返回指向LL
+	POP 	DPH
+	POP 	DPL
+	MOV 	DPTR,#LL
+	PUSH 	DPL
+	PUSH 	DPH
+ 	RETI
+TAB0:
+	DB 		0C0H,0F9H,0A4H,0B0H,99H,92H,82H,0F8H,80H,90H,88H,83H,0C6H,0A1H,86H,8EH,0FFH
+	END	
